@@ -40,6 +40,7 @@ COURSES = {
         {'id': 28, 'title': '🦾 Микросервисы на Python', 'year': 2024, 'description': 'Архитектура и разработка микросервисов.', 'links': [{'title': 'Microservices', 'url': 'https://microservices.io/'}]},
         {'id': 29, 'title': '📚 Паттерны проектирования', 'year': 2022, 'description': 'Обзор классических шаблонов.', 'links': [{'title': 'Design Patterns', 'url': 'https://refactoring.guru/design-patterns'}]},
         {'id': 30, 'title': '⚙️ Разработка CLI приложений', 'year': 2023, 'description': 'Создание утилит командной строки.', 'links': [{'title': 'Python CLI', 'url': 'https://click.palletsprojects.com/'}]},
+        {'id': 31, 'title': 'Bogdan Stashchuk Software Engineer, MBA, PhD, CCIE', 'year': 2022, 'description': 'Docker - Полный курс Docker', 'links': [{'title': 'Docker', 'url': 'https://cloud.mail.ru/public/ck8b/VruMhK4br'}]},
     ],
     'web': [
         {'id': 101, 'title': '🎨 HTML и CSS', 'year': 2021, 'description': 'Создание современных сайтов, адаптивный дизайн.', 'links': [{'title': 'HTML Tutorial', 'url': 'https://html.spec.whatwg.org/'}]},

@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from rapidfuzz import fuzz
 from courses_data import COURSE_CATEGORIES, COURSES
+from aiogram.types import InlineKeyboardButton
 
 load_dotenv()
 
@@ -67,8 +68,6 @@ def format_course_message(course, current_idx, total):
         f"{course.get('description', '')}\n\n"
         f"{links_text}"
     )
-
-from aiogram.types import InlineKeyboardButton
 
 def course_navigation_keyboard(course, current_idx, total, prefix, fav_list):
     kb = InlineKeyboardBuilder()
