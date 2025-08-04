@@ -43,9 +43,13 @@ def save_favorites(data):
 
 favorites = load_favorites()
 
+def total_courses_count():
+    return sum(len(courses) for courses in COURSES.values())
+
 def main_menu_keyboard():
+    total_courses = total_courses_count()
     kb = InlineKeyboardBuilder()
-    kb.button(text="📚 Курсы", callback_data="menu_courses")
+    kb.button(text=f"📚 Курсы (всего: {total_courses})", callback_data="menu_courses")
     kb.button(text="🔍 Поиск", callback_data="start_search")
     kb.button(text="⭐️ Избранное", callback_data="view_favorites")
     kb.adjust(1)
@@ -85,7 +89,7 @@ def course_navigation_keyboard(course, current_idx, total, prefix, fav_list):
     if current_idx > 0:
         buttons.append(InlineKeyboardButton(text="⬅️", callback_data=f"{prefix}_prev"))
 
-    buttons.append(InlineKeyboardButton(text=f"{current_idx+1}/{total}", callback_data="noop"))
+    buttons.append(InlineKeyboardButton(text=f"{current_idx+1}/{total}", callback_data="choose_course_number"))
 
     if current_idx < total - 1:
         buttons.append(InlineKeyboardButton(text="➡️", callback_data=f"{prefix}_next"))
@@ -186,6 +190,42 @@ async def callbacks_handler(call: types.CallbackQuery):
             idx += 1
         user_positions[user_id] = idx
         await send_course_message(call, courses[idx], idx, len(courses), "course")
+        await call.answer()
+        return
+
+    if data == "choose_course_number":
+        prefix = None
+        category = None
+        state = user_states.get(user_id)
+        if isinstance(state, str):
+            if state.startswith("category:"):
+                prefix = "course"
+                category = state.split(':')[1]
+        elif isinstance(state, dict) and state.get("type") == "local_search_results":
+            prefix = "search"
+        elif state == "fav_view":
+            prefix = "fav"
+        else:
+            prefix = None
+
+        if prefix is None:
+            await call.answer("Невозможно определить список курсов для выбора.", show_alert=True)
+            return
+
+        user_states[user_id] = {"type": "awaiting_course_number", "prefix": prefix}
+        if prefix == "course":
+            user_states[user_id]["category"] = category
+
+        total = 0
+        if prefix == "course":
+            total = len(courses_in_category(category))
+        elif prefix == "search":
+            total = len(state["results"])
+        elif prefix == "fav":
+            fav_list = favorites.get(str(user_id), [])
+            total = len(fav_list)
+
+        await call.message.edit_text(f"Введите номер курса от 1 до {total} для перехода или 'Отмена' для отмены.")
         await call.answer()
         return
 
@@ -362,7 +402,86 @@ async def generic_message_handler(message: types.Message):
     state = user_states.get(user_id)
     text_lower = message.text.strip().lower()
 
-    if state == "awaiting_search":
+    if isinstance(state, dict) and state.get("type") == "awaiting_course_number":
+        prefix = state.get("prefix")
+
+        if text_lower == "отмена":
+            user_states.pop(user_id, None)
+            user_positions.pop(user_id, None)
+            await message.answer("Отмена выбора курса.", reply_markup=main_menu_keyboard())
+            return
+
+        if not message.text.isdigit():
+            await message.answer("Пожалуйста, введите корректный номер курса (число) или 'Отмена'.")
+            return
+
+        course_number = int(message.text)
+        if prefix == "course":
+            category = state.get("category")
+            if not category:
+                await message.answer("Ошибка: категория не определена.")
+                user_states.pop(user_id, None)
+                return
+            courses = courses_in_category(category)
+            total = len(courses)
+            if not (1 <= course_number <= total):
+                await message.answer(f"Введите номер от 1 до {total} или 'Отмена'.")
+                return
+            idx = course_number - 1
+            user_positions[user_id] = idx
+            user_states[user_id] = f"category:{category}"
+            text = format_course_message(courses[idx], idx, total)
+            user_fav_list = favorites.setdefault(str(user_id), [])
+            keyboard = course_navigation_keyboard(courses[idx], idx, total, prefix, user_fav_list)
+            await message.answer(text, reply_markup=keyboard)
+            return
+
+        elif prefix == "search":
+            search_state = user_states.get(user_id)
+            if not search_state or not isinstance(search_state, dict) or search_state.get("type") != "local_search_results":
+                await message.answer("Ошибка: результаты поиска не найдены.")
+                user_states.pop(user_id, None)
+                return
+            results = search_state["results"]
+            total = len(results)
+            if not (1 <= course_number <= total):
+                await message.answer(f"Введите номер от 1 до {total} или 'Отмена'.")
+                return
+            idx = course_number - 1
+            user_positions[user_id] = idx
+            user_states[user_id] = search_state
+            category, course = results[idx]
+            user_fav_list = favorites.setdefault(str(user_id), [])
+            keyboard = course_navigation_keyboard(course, idx, total, prefix, user_fav_list)
+            text = f"Результаты поиска:\n\n{format_course_message(course, idx, total)}\nКатегория: {COURSE_CATEGORIES.get(category, category)}"
+            await message.answer(text, reply_markup=keyboard)
+            return
+
+        elif prefix == "fav":
+            fav_list = favorites.get(str(user_id), [])
+            total = len(fav_list)
+            if not (1 <= course_number <= total):
+                await message.answer(f"Введите номер от 1 до {total} или 'Отмена'.")
+                return
+            idx = course_number - 1
+            user_positions[user_id] = idx
+            user_states[user_id] = "fav_view"
+            fav_id = fav_list[idx]
+            course = None
+            for cat_courses in COURSES.values():
+                for c in cat_courses:
+                    if c['id'] == fav_id:
+                        course = c
+                        break
+                if course:
+                    break
+            if course:
+                keyboard = course_navigation_keyboard(course, idx, total, prefix, fav_list)
+                text = format_course_message(course, idx, total)
+                await message.answer(text, reply_markup=keyboard)
+            return
+
+    elif state == "awaiting_search":
         if text_lower == "отмена":
             user_states.pop(user_id, None)
             user_positions.pop(user_id, None)
